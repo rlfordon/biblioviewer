@@ -1,0 +1,19 @@
+{
+  "name": "biblioviewer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn an annotated bibliography into a single self-contained HTML file: bibliography sidebar, reading pane, cached article snapshots, inline editing with lock.",
+  "repository": "github:rlfordon/biblioviewer",
+  "license": "MIT",
+  "scripts": {
+    "fetch": "node scripts/fetch_snapshots.mjs bibliography.json",
+    "build": "node scripts/build.mjs bibliography.json out.html",
+    "test": "node scripts/smoke_test.mjs out.html"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "dompurify": "^3.1.0",
+    "jsdom": "^24.0.0"
+  }
+}

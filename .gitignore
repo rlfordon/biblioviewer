@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# bibliography content stays private — built viewers and data (with cached
+# article snapshots) are shared directly with readers, never published here
+bibliography.json
+*.html
+!template.html
+
+# packaged skill snapshot for claude.ai upload
+biblioviewer-skill.zip
+
+.DS_Store

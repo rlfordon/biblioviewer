@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__BIBLIO_TITLE__</title>
+<style>
+  :root {
+    --bg: #f3f2ee;
+    --panel: #fdfdfb;
+    --ink: #23262b;
+    --ink-soft: #5b6069;
+    --ink-faint: #8a8f98;
+    --line: #e2e0da;
+    --accent: #2b5b84;
+    --accent-ink: #ffffff;
+    --select-bg: #eaf1f7;
+    --hover-bg: #f2f4f2;
+    --banner-bg: #f4efe3;
+    --banner-ink: #6b5d33;
+    --danger: #a33c3c;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --panel: #1e2023;
+      --ink: #e6e4df;
+      --ink-soft: #a8acb3;
+      --ink-faint: #7d828a;
+      --line: #33363b;
+      --accent: #86aed2;
+      --accent-ink: #10151a;
+      --select-bg: #26303a;
+      --hover-bg: #24262a;
+      --banner-bg: #2b2921;
+      --banner-ink: #cdbd8a;
+      --danger: #d98080;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    overflow: hidden;
+  }
+  button { font-family: inherit; }
+
+  #app { display: flex; height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  #list-pane {
+    width: 380px;
+    min-width: 280px;
+    max-width: 60vw;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+  #biblio-header {
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  #biblio-title {
+    font-family: var(--serif);
+    font-size: 1.15rem;
+    line-height: 1.3;
+    margin: 0 0 8px;
+    cursor: pointer;
+  }
+  #biblio-title:hover { color: var(--accent); }
+  #filter {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  #filter:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  #entries { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+  .section-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--panel);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: 14px 18px 6px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .section-heading .sec-name { flex: 1; }
+
+  .entry {
+    padding: 12px 18px 12px 15px;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .entry:hover { background: var(--hover-bg); }
+  .entry[aria-selected="true"] {
+    background: var(--select-bg);
+    border-left-color: var(--accent);
+  }
+  .entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .entry-title {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    margin-bottom: 4px;
+  }
+  .entry-cite { font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 6px; }
+  .entry-annot {
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .entry[aria-selected="true"] .entry-annot { -webkit-line-clamp: unset; color: var(--ink); }
+
+  /* ---------- Inline annotation editing ---------- */
+  .annot-wrap { position: relative; padding-right: 26px; }
+  .annot-pencil {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    border: 1px solid transparent;
+    background: none;
+    border-radius: 5px;
+    padding: 2px 5px;
+    font-size: 0.8rem;
+    line-height: 1;
+    color: var(--ink-faint);
+    cursor: pointer;
+    opacity: 0;
+  }
+  .entry:hover .annot-pencil, .meta-annot:hover .annot-pencil,
+  .annot-pencil:focus-visible { opacity: 1; }
+  .annot-pencil:hover { color: var(--accent); border-color: var(--line); background: var(--panel); }
+  .entry-annot.empty { font-style: italic; color: var(--ink-faint); }
+  .annot-editor textarea {
+    width: 100%;
+    min-height: 84px;
+    resize: vertical;
+    font-family: var(--sans);
+    font-size: 0.84rem;
+    line-height: 1.45;
+    padding: 7px 9px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    box-sizing: border-box;
+  }
+  .annot-editor .annot-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 5px;
+  }
+  .annot-editor .annot-hint { font-size: 0.68rem; color: var(--ink-faint); margin-left: auto; }
+
+  #save-pill {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 50;
+    border: none;
+    border-radius: 24px;
+    padding: 11px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.25);
+  }
+  #save-pill:hover { opacity: 0.92; }
+
+  #toast {
+    position: fixed;
+    bottom: 74px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 0.82rem;
+    padding: 9px 16px;
+    border-radius: 18px;
+    opacity: 0;
+    pointer-events: none;
+    max-width: 80vw;
+  }
+  #toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    #toast { transition: opacity 0.25s; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 9px;
+    margin: 0 4px 4px 0;
+    border: 1px solid transparent;
+  }
+  .tag-amber  { background: #f5e9c8; color: #6b5518; }
+  .tag-violet { background: #e7dff2; color: #55407a; }
+  .tag-blue   { background: #dbe8f4; color: #2b5b84; }
+  .tag-green  { background: #ddecdd; color: #34633a; }
+  .tag-red    { background: #f3dede; color: #8c3a3a; }
+  .tag-gray   { background: #e8e8e6; color: #55585e; }
+  @media (prefers-color-scheme: dark) {
+    .tag-amber  { background: #3b3320; color: #dcc98a; }
+    .tag-violet { background: #322b3f; color: #c3b2e0; }
+    .tag-blue   { background: #24313d; color: #9dc0dd; }
+    .tag-green  { background: #24352a; color: #a4cba9; }
+    .tag-red    { background: #3d2828; color: #d99f9f; }
+    .tag-gray   { background: #2e3033; color: #b0b3b8; }
+  }
+
+  /* ---------- Toolbar ---------- */
+  #toolbar {
+    border-top: 1px solid var(--line);
+    padding: 8px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #toolbar.hidden { display: none; }
+  .tbtn {
+    font-size: 0.78rem;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .tbtn:hover { border-color: var(--accent); color: var(--accent); }
+  .tbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .tbtn.primary:hover { opacity: 0.9; color: var(--accent-ink); }
+  #edit-state {
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    margin-left: auto;
+  }
+  body.editing #edit-state { color: var(--banner-ink); font-weight: 600; }
+
+  /* ---------- Divider ---------- */
+  #divider {
+    width: 7px;
+    margin: 0 -3px;
+    flex: none;
+    cursor: col-resize;
+    z-index: 5;
+  }
+  #divider:hover, #divider.dragging { background: var(--accent); opacity: 0.25; }
+
+  /* ---------- Detail pane ---------- */
+  #detail-pane {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  #detail-inner { flex: 1; display: flex; flex-direction: column; }
+
+  #back-btn {
+    display: none;
+    align-self: flex-start;
+    margin: 10px 16px 0;
+  }
+
+  .meta-block {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 34px 28px 0;
+    width: 100%;
+  }
+  .meta-block h2.art-title {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    line-height: 1.25;
+    margin: 0 0 8px;
+  }
+  .meta-block h2.art-title a { color: var(--ink); text-decoration: none; }
+  .meta-block h2.art-title a:hover { color: var(--accent); text-decoration: underline; }
+  .meta-cite { font-size: 0.88rem; color: var(--ink-soft); margin-bottom: 6px; }
+  .meta-tags { margin-bottom: 10px; }
+  .meta-annot {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    border-left: 3px solid var(--line);
+    padding-left: 12px;
+    margin: 12px 0 4px;
+  }
+  .meta-annot .annot-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .snap-banner {
+    max-width: 760px;
+    margin: 18px auto 0;
+    width: 100%;
+    padding: 7px 28px;
+    font-size: 0.78rem;
+    color: var(--banner-ink);
+    background: var(--banner-bg);
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-radius: 6px;
+  }
+  .snap-banner a, .snap-banner button {
+    color: inherit;
+    font-size: inherit;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .article-body {
+    font-family: var(--serif);
+    font-size: 19px;
+    line-height: 1.55;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 22px 28px 80px;
+  }
+  .article-body img { max-width: 100%; height: auto; border-radius: 4px; }
+  .article-body a { color: var(--accent); }
+  .article-body blockquote {
+    margin: 1em 0;
+    padding: 0.1em 1.2em;
+    border-left: 3px solid var(--line);
+    color: var(--ink-soft);
+  }
+  .article-body pre, .article-body table { overflow-x: auto; display: block; max-width: 100%; font-size: 0.85em; }
+  .article-body table { border-collapse: collapse; }
+  .article-body th, .article-body td { border: 1px solid var(--line); padding: 4px 8px; }
+  .article-body h1, .article-body h2, .article-body h3 { line-height: 1.3; }
+
+  /* Welcome / intro view */
+  .welcome {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 44px 28px 80px;
+    width: 100%;
+  }
+  .welcome h2 {
+    font-family: var(--serif);
+    font-size: 1.7rem;
+    line-height: 1.25;
+    margin: 0 0 18px;
+  }
+  .welcome .intro-par {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+  .welcome .hint { font-size: 0.85rem; color: var(--ink-faint); margin-top: 26px; }
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.78em;
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--panel);
+  }
+
+  /* Fallback card + live view */
+  .fallback-card {
+    max-width: 560px;
+    margin: 60px auto;
+    padding: 30px;
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .fallback-card p { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.5; }
+  .fallback-card .actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+  .abtn {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .abtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .abtn:hover { border-color: var(--accent); }
+
+  #live-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #live-note {
+    padding: 6px 16px;
+    font-size: 0.78rem;
+    color: var(--banner-ink);
+    background: var(--banner-bg);
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #live-note button, #live-note a { color: inherit; text-decoration: underline; background: none; border: none; font-size: inherit; padding: 0; cursor: pointer; }
+  #live-frame { flex: 1; width: 100%; border: none; background: #fff; }
+
+  /* ---------- Edit mode ---------- */
+  .edit-controls { display: none; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+  body.editing .edit-controls { display: flex; }
+  .ebtn {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--panel);
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .ebtn:hover { border-color: var(--accent); color: var(--accent); }
+  .ebtn.danger:hover, .ebtn.confirm { border-color: var(--danger); color: var(--danger); }
+  .sec-controls { display: none; gap: 4px; }
+  body.editing .sec-controls { display: flex; }
+  body.editing .section-heading { padding-top: 10px; padding-bottom: 8px; }
+
+  dialog {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--ink);
+    max-width: 560px;
+    width: calc(100vw - 40px);
+    padding: 22px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.35); }
+  dialog h3 { margin: 0 0 14px; font-size: 1.05rem; }
+  dialog label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--ink-soft); margin: 12px 0 3px; }
+  dialog input[type="text"], dialog input[type="url"], dialog textarea, dialog select {
+    width: 100%;
+    padding: 7px 9px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  dialog textarea { min-height: 110px; resize: vertical; line-height: 1.45; }
+  dialog .dlg-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  dialog .field-hint { font-size: 0.72rem; color: var(--ink-faint); margin-top: 3px; }
+
+  /* ---------- Narrow viewport ---------- */
+  @media (max-width: 720px) {
+    #list-pane { width: 100% !important; max-width: none; border-right: none; }
+    #divider { display: none; }
+    #detail-pane { display: none; }
+    body.show-detail #list-pane { display: none; }
+    body.show-detail #detail-pane { display: flex; }
+    #back-btn { display: inline-block; }
+  }
+
+  /* ---------- Reduced motion / print ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .entry, .tbtn, .abtn, .ebtn { transition: background-color 0.12s, border-color 0.12s, color 0.12s; }
+  }
+  @media print {
+    :root {
+      --bg: #fff; --panel: #fff; --ink: #000; --ink-soft: #333; --ink-faint: #555;
+      --line: #bbb; --banner-bg: #fff; --banner-ink: #555; --select-bg: #fff; --accent: #000;
+    }
+    body { overflow: visible; }
+    #app { display: block; height: auto; }
+    #list-pane, #divider, #toolbar, #back-btn, .snap-banner button, .fallback-card,
+    #save-pill, #toast, .annot-pencil { display: none !important; }
+    #detail-pane { overflow: visible; }
+    .snap-banner a[href]::after, .meta-block h2.art-title a[href]::after { content: " (" attr(href) ")"; font-size: 0.8em; }
+    .article-body { padding-bottom: 0; }
+    @page { margin: 1in; }
+  }
+
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<script type="application/json" id="biblio-data">__BIBLIO_DATA__</script>
+
+<div id="app">
+  <aside id="list-pane" aria-label="Bibliography entries">
+    <header id="biblio-header">
+      <h1 id="biblio-title" title="Show introduction"></h1>
+      <input id="filter" type="search" placeholder="Filter entries…  ( / )" aria-label="Filter entries">
+    </header>
+    <nav id="entries" role="listbox" aria-label="Bibliography"></nav>
+    <footer id="toolbar">
+      <button class="tbtn" id="btn-edit">Edit</button>
+      <button class="tbtn" id="btn-info" hidden>Title &amp; intro…</button>
+      <button class="tbtn" id="btn-add-section" hidden>Add section</button>
+      <button class="tbtn primary" id="btn-export" hidden>Export…</button>
+      <span id="edit-state"></span>
+    </footer>
+  </aside>
+
+  <div id="divider" title="Drag to resize"></div>
+
+  <main id="detail-pane" aria-live="polite">
+    <button class="tbtn" id="back-btn">← Back to list</button>
+    <div id="detail-inner"></div>
+  </main>
+</div>
+
+<button id="save-pill" hidden>⬇ Download updated file</button>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlg-entry">
+  <h3 id="dlg-entry-title">Edit entry</h3>
+  <form method="dialog" id="form-entry">
+    <label for="f-title">Title</label>
+    <input type="text" id="f-title" required>
+    <label for="f-url">Link (URL)</label>
+    <input type="url" id="f-url" placeholder="https://…">
+    <label for="f-cite">Citation line</label>
+    <input type="text" id="f-cite" placeholder="Author, Source (Date)">
+    <label for="f-annot">Annotation</label>
+    <textarea id="f-annot"></textarea>
+    <label for="f-tags">Tags</label>
+    <input type="text" id="f-tags" placeholder="In-depth, Legal scholar">
+    <div class="field-hint" id="f-tags-hint"></div>
+    <label for="f-section">Section</label>
+    <select id="f-section"></select>
+    <div class="field-hint" id="f-snap-note"></div>
+    <div class="dlg-actions">
+      <button class="abtn" value="cancel" formnovalidate>Cancel</button>
+      <button class="abtn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-section">
+  <h3 id="dlg-section-title">Section</h3>
+  <form method="dialog" id="form-section">
+    <label for="f-sec-name">Section heading</label>
+    <input type="text" id="f-sec-name" required>
+    <div class="dlg-actions">
+      <button class="abtn" value="cancel" formnovalidate>Cancel</button>
+      <button class="abtn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-info">
+  <h3>Bibliography title &amp; introduction</h3>
+  <form method="dialog" id="form-info">
+    <label for="f-biblio-title">Title</label>
+    <input type="text" id="f-biblio-title" required>
+    <label for="f-intro">Introduction (separate paragraphs with a blank line; basic HTML like &lt;strong&gt; allowed)</label>
+    <textarea id="f-intro" style="min-height:180px"></textarea>
+    <div class="dlg-actions">
+      <button class="abtn" value="cancel" formnovalidate>Cancel</button>
+      <button class="abtn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-export">
+  <h3>Export</h3>
+  <p style="font-size:0.85rem;color:var(--ink-soft);line-height:1.5">
+    <strong>Locked copy</strong> is what you share: readers see a clean viewer with no editing controls.<br>
+    <strong>Editable master</strong> keeps the editor available — keep this copy for yourself.
+  </p>
+  <p style="font-size:0.78rem;color:var(--ink-faint);line-height:1.5">
+    Note: article snapshots are captured when the file is built. Entries added here will show
+    “no cached copy” until you rebuild the file with snapshots (ask Claude to refresh them).
+  </p>
+  <div class="dlg-actions">
+    <button class="abtn" id="btn-export-cancel">Cancel</button>
+    <button class="abtn" id="btn-export-master">Save editable master</button>
+    <button class="abtn primary" id="btn-export-locked">Export locked copy</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  'use strict';
+
+  // Captured before any rendering: pristine document for self-export.
+  const PRISTINE = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+  const dataEl = document.getElementById('biblio-data');
+  let data = JSON.parse(dataEl.textContent);
+
+  const TAG_COLORS = ['amber', 'violet', 'blue', 'green', 'red', 'gray'];
+  const unlockedByHash = location.hash === '#unlock';
+  const canQuickEdit = () => !data.locked || unlockedByHash;
+  let dirty = false;
+  let editing = false;
+  let selectedId = null;
+  let detailView = 'auto'; // 'auto' | 'live'
+
+  const $ = (sel) => document.querySelector(sel);
+  const entriesEl = $('#entries');
+  const detailEl = $('#detail-inner');
+  const filterEl = $('#filter');
+
+  const allEntries = () => data.sections.flatMap((s) => s.entries);
+  const findEntry = (id) => allEntries().find((e) => e.id === id);
+  const sectionOf = (id) => data.sections.find((s) => s.entries.some((e) => e.id === id));
+
+  function tagColor(label) {
+    data.tagDefinitions = data.tagDefinitions || [];
+    let def = data.tagDefinitions.find((t) => t.label === label);
+    if (!def) {
+      def = { label, color: TAG_COLORS[data.tagDefinitions.length % TAG_COLORS.length] };
+      data.tagDefinitions.push(def);
+    }
+    return def.color;
+  }
+
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'text') node.textContent = v;
+      else if (k === 'html') node.innerHTML = v;
+      else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+      else if (v !== null && v !== undefined) node.setAttribute(k, v);
+    }
+    for (const c of children) if (c) node.append(c);
+    return node;
+  }
+
+  function tagPills(tags) {
+    return (tags || []).map((t) =>
+      el('span', { class: 'tag tag-' + tagColor(t), text: t })
+    );
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  /* Inline annotation editor: swap the annotation block for a textarea with
+     explicit Save/Cancel. `render` restores both panes afterwards. */
+  let annotEditing = false;
+  function startAnnotEdit(entryId, wrapEl) {
+    if (annotEditing) return;
+    annotEditing = true;
+    const entry = findEntry(entryId);
+    const ta = el('textarea', { 'aria-label': 'Edit annotation' });
+    ta.value = entry.annotation || '';
+    const finish = (save) => {
+      annotEditing = false;
+      if (save) {
+        entry.annotation = ta.value.trim();
+        markDirty();
+        showToast('Annotation updated — download the file to keep your edits');
+      }
+      renderList();
+      if (selectedId) renderDetail(false);
+    };
+    const editor = el('div', { class: 'annot-editor', onclick: (ev) => ev.stopPropagation() },
+      ta,
+      el('div', { class: 'annot-actions' },
+        el('button', { class: 'abtn primary', text: 'Save', onclick: () => finish(true) }),
+        el('button', { class: 'abtn', text: 'Cancel', onclick: () => finish(false) }),
+        el('span', { class: 'annot-hint', text: '⌘⏎ save · Esc cancel' })
+      )
+    );
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); finish(true); }
+      if (ev.key === 'Escape') { ev.stopPropagation(); finish(false); }
+    });
+    wrapEl.replaceChildren(editor);
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  /* Annotation block + hover pencil, shared by sidebar and reading pane. */
+  function annotBlock(entry, { inDetail } = {}) {
+    const hasAnnot = Boolean(entry.annotation);
+    if (!hasAnnot && !canQuickEdit()) return null;
+    const wrap = el('div', { class: 'annot-wrap' });
+    const body = inDetail
+      ? el('div', { class: 'meta-annot' },
+          el('span', { class: 'annot-label', text: 'Annotation' }),
+          hasAnnot ? el('span', { html: entry.annotation })
+                   : el('span', { class: 'entry-annot empty', text: 'No annotation yet.' }))
+      : el('div', { class: 'entry-annot' + (hasAnnot ? '' : ' empty'), html: hasAnnot ? entry.annotation : 'No annotation yet.' });
+    wrap.append(body);
+    if (canQuickEdit()) {
+      wrap.append(el('button', {
+        class: 'annot-pencil',
+        title: 'Edit annotation',
+        'aria-label': 'Edit annotation',
+        text: '✎',
+        onclick: (ev) => { ev.stopPropagation(); startAnnotEdit(entry.id, wrap); },
+      }));
+    }
+    return wrap;
+  }
+
+  /* ---------------- Sidebar rendering ---------------- */
+
+  function matchesFilter(entry, q) {
+    if (!q) return true;
+    const hay = [entry.title, entry.citation, entry.annotation, (entry.tags || []).join(' ')]
+      .join(' ').toLowerCase();
+    return q.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
+  }
+
+  function renderList() {
+    annotEditing = false; // any open inline editor is discarded by the re-render
+    const q = filterEl.value.trim();
+    entriesEl.textContent = '';
+    data.sections.forEach((section, si) => {
+      const visible = section.entries.filter((e) => matchesFilter(e, q));
+      if (!visible.length && q) return;
+
+      const head = el('div', { class: 'section-heading' },
+        el('span', { class: 'sec-name', text: section.heading })
+      );
+      const secCtl = el('span', { class: 'sec-controls' },
+        el('button', { class: 'ebtn', title: 'Rename section', text: 'Rename', onclick: () => openSectionDialog(si) }),
+        el('button', { class: 'ebtn', title: 'Add entry to this section', text: '+ Entry', onclick: () => openEntryDialog(null, si) }),
+        el('button', { class: 'ebtn', title: 'Move section up', text: '↑', onclick: () => moveSection(si, -1) }),
+        el('button', { class: 'ebtn', title: 'Move section down', text: '↓', onclick: () => moveSection(si, 1) }),
+        makeDeleteButton(() => deleteSection(si))
+      );
+      head.append(secCtl);
+      entriesEl.append(head);
+
+      visible.forEach((entry) => {
+        const node = el('div', {
+          class: 'entry',
+          role: 'option',
+          tabindex: '0',
+          'data-id': entry.id,
+          'aria-selected': String(entry.id === selectedId),
+          onclick: () => selectEntry(entry.id),
+          onkeydown: (ev) => {
+            if (ev.target !== ev.currentTarget) return; // typing in the inline editor, not the row
+            if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectEntry(entry.id); }
+          },
+        },
+          el('div', { class: 'entry-title', text: entry.title }),
+          el('div', { class: 'entry-cite', text: entry.citation || '' }),
+          (entry.tags || []).length ? el('div', {}, ...tagPills(entry.tags)) : null,
+          annotBlock(entry)
+        );
+        const idx = section.entries.indexOf(entry);
+        const ctl = el('div', { class: 'edit-controls' },
+          el('button', { class: 'ebtn', text: 'Edit', onclick: (ev) => { ev.stopPropagation(); openEntryDialog(entry.id); } }),
+          el('button', { class: 'ebtn', text: '↑', title: 'Move up', onclick: (ev) => { ev.stopPropagation(); moveEntry(si, idx, -1); } }),
+          el('button', { class: 'ebtn', text: '↓', title: 'Move down', onclick: (ev) => { ev.stopPropagation(); moveEntry(si, idx, 1); } }),
+          makeDeleteButton(() => deleteEntry(entry.id), true)
+        );
+        node.append(ctl);
+        entriesEl.append(node);
+      });
+    });
+  }
+
+  function makeDeleteButton(onConfirm, stop) {
+    const btn = el('button', { class: 'ebtn danger', text: 'Delete' });
+    let armed = false;
+    btn.addEventListener('click', (ev) => {
+      if (stop) ev.stopPropagation();
+      if (!armed) {
+        armed = true;
+        btn.textContent = 'Confirm?';
+        btn.classList.add('confirm');
+        setTimeout(() => { armed = false; btn.textContent = 'Delete'; btn.classList.remove('confirm'); }, 2500);
+      } else {
+        onConfirm();
+      }
+    });
+    return btn;
+  }
+
+  /* ---------------- Detail pane ---------------- */
+
+  function showWelcome() {
+    selectedId = null;
+    detailView = 'auto';
+    document.body.classList.remove('show-detail');
+    detailEl.textContent = '';
+    const w = el('div', { class: 'welcome' },
+      el('h2', { text: data.title, tabindex: '-1' }),
+      ...(data.intro || []).map((p) => el('p', { class: 'intro-par', html: p })),
+      el('p', { class: 'hint', html: 'Select an entry on the left to read it here. Navigate with <kbd>↑</kbd> <kbd>↓</kbd> (or <kbd>j</kbd>/<kbd>k</kbd>), filter with <kbd>/</kbd>.' })
+    );
+    detailEl.append(w);
+    renderList();
+  }
+
+  function selectEntry(id, focusDetail = true) {
+    selectedId = id;
+    detailView = 'auto';
+    document.body.classList.add('show-detail');
+    renderList();
+    const sel = entriesEl.querySelector('[aria-selected="true"]');
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+    renderDetail(focusDetail);
+  }
+
+  function renderDetail(focusHeading) {
+    const entry = findEntry(selectedId);
+    detailEl.textContent = '';
+    if (!entry) { showWelcome(); return; }
+
+    const meta = el('div', { class: 'meta-block' },
+      el('h2', { class: 'art-title', tabindex: '-1' },
+        entry.url
+          ? el('a', { href: entry.url, target: '_blank', rel: 'noopener noreferrer', text: entry.title })
+          : document.createTextNode(entry.title)
+      ),
+      el('div', { class: 'meta-cite', text: entry.citation || '' }),
+      (entry.tags || []).length ? el('div', { class: 'meta-tags' }, ...tagPills(entry.tags)) : null,
+      annotBlock(entry, { inDetail: true })
+    );
+    detailEl.append(meta);
+
+    const snap = entry.snapshot;
+    const hasSnap = snap && snap.status === 'ok' && snap.html;
+
+    if (detailView === 'live' && entry.url) {
+      renderLive(entry, hasSnap);
+    } else if (hasSnap) {
+      const banner = el('div', { class: 'snap-banner' },
+        el('span', { text: '📄 Cached copy' + (snap.fetchedAt ? ' · saved ' + snap.fetchedAt : '') }),
+        entry.url ? el('a', { href: entry.url, target: '_blank', rel: 'noopener noreferrer', text: 'View original ↗' }) : null,
+        entry.url ? el('button', { text: 'Try live page here', onclick: () => { detailView = 'live'; renderDetail(false); } }) : null
+      );
+      detailEl.append(banner);
+      const body = el('div', { class: 'article-body' });
+      body.innerHTML = snap.html;
+      detailEl.append(body);
+    } else {
+      const card = el('div', { class: 'fallback-card' },
+        el('p', { text: snap && snap.status === 'failed'
+          ? 'No cached copy of this article is included in this file (it could not be captured when the file was built).'
+          : 'No cached copy of this article is included in this file.' }),
+        el('p', { text: 'You can try showing the live page here — if the pane stays blank, the site does not allow embedding, and opening it in a new tab is the way to read it.' }),
+        el('div', { class: 'actions' },
+          entry.url ? el('button', { class: 'abtn', text: 'Try live page here', onclick: () => { detailView = 'live'; renderDetail(false); } }) : null,
+          entry.url ? el('a', { class: 'abtn primary', href: entry.url, target: '_blank', rel: 'noopener noreferrer', text: 'Open in new tab ↗' }) : null
+        )
+      );
+      detailEl.append(card);
+    }
+
+    if (focusHeading) {
+      const h = detailEl.querySelector('.art-title');
+      if (h) h.focus({ preventScroll: true });
+    }
+    detailEl.parentElement.scrollTop = 0;
+  }
+
+  function renderLive(entry, hasSnap) {
+    const wrap = el('div', { id: 'live-wrap' },
+      el('div', { id: 'live-note' },
+        el('span', { text: 'Live page — if this stays blank, the site blocks embedding.' }),
+        el('a', { href: entry.url, target: '_blank', rel: 'noopener noreferrer', text: 'Open in new tab ↗' }),
+        hasSnap ? el('button', { text: 'Back to cached copy', onclick: () => { detailView = 'auto'; renderDetail(false); } }) : null
+      ),
+      el('iframe', { id: 'live-frame', src: entry.url, title: entry.title })
+    );
+    detailEl.append(wrap);
+  }
+
+  /* ---------------- Editing ---------------- */
+
+  function markDirty() {
+    dirty = true;
+    $('#edit-state').textContent = editing ? '✏️ Editing — unsaved changes' : '';
+    $('#save-pill').hidden = false;
+    saveDraft();
+  }
+
+  function setEditing(on) {
+    editing = on;
+    document.body.classList.toggle('editing', on);
+    $('#btn-edit').textContent = on ? 'Done editing' : 'Edit';
+    $('#btn-info').hidden = !on;
+    $('#btn-add-section').hidden = !on;
+    $('#btn-export').hidden = !on && !dirty;
+    $('#edit-state').textContent = on ? (dirty ? '✏️ Editing — unsaved changes' : '✏️ Editing') : (dirty ? 'Unsaved changes — export to keep them' : '');
+    renderList();
+  }
+
+  let dlgEntryTarget = null; // {id} or {sectionIndex} for new
+  function openEntryDialog(id, sectionIndex) {
+    dlgEntryTarget = { id, sectionIndex };
+    const entry = id ? findEntry(id) : null;
+    $('#dlg-entry-title').textContent = entry ? 'Edit entry' : 'Add entry';
+    $('#f-title').value = entry ? entry.title : '';
+    $('#f-url').value = entry ? (entry.url || '') : '';
+    $('#f-cite').value = entry ? (entry.citation || '') : '';
+    $('#f-annot').value = entry ? (entry.annotation || '') : '';
+    $('#f-tags').value = entry ? (entry.tags || []).join(', ') : '';
+    $('#f-tags-hint').textContent = 'Existing tags: ' + (data.tagDefinitions || []).map((t) => t.label).join(', ');
+    const sel = $('#f-section');
+    sel.textContent = '';
+    data.sections.forEach((s, i) => sel.append(el('option', { value: String(i), text: s.heading })));
+    sel.value = String(entry ? data.sections.indexOf(sectionOf(id)) : (sectionIndex ?? 0));
+    $('#f-snap-note').textContent = entry && entry.snapshot && entry.snapshot.status === 'ok'
+      ? 'This entry has a cached article copy (saved ' + entry.snapshot.fetchedAt + '). Changing the URL will drop it until the file is rebuilt.'
+      : 'New/uncached entries show a "no cached copy" notice until the file is rebuilt with snapshots.';
+    $('#dlg-entry').showModal();
+  }
+
+  $('#form-entry').addEventListener('submit', () => {
+    if ($('#dlg-entry').returnValue === 'cancel') return;
+  });
+  $('#dlg-entry').addEventListener('close', () => {
+    if ($('#dlg-entry').returnValue !== 'save') return;
+    const { id, sectionIndex } = dlgEntryTarget;
+    const entry = id ? findEntry(id) : {
+      id: 'entry-' + Math.random().toString(36).slice(2, 9),
+      tags: [],
+    };
+    const oldUrl = entry.url;
+    entry.title = $('#f-title').value.trim();
+    entry.url = $('#f-url').value.trim();
+    entry.citation = $('#f-cite').value.trim();
+    entry.annotation = $('#f-annot').value.trim();
+    entry.tags = $('#f-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
+    entry.tags.forEach(tagColor);
+    if (id && oldUrl !== entry.url) delete entry.snapshot;
+
+    const targetSec = data.sections[parseInt($('#f-section').value, 10)];
+    const currentSec = id ? sectionOf(id) : null;
+    if (!id) {
+      targetSec.entries.push(entry);
+    } else if (currentSec !== targetSec) {
+      currentSec.entries.splice(currentSec.entries.indexOf(entry), 1);
+      targetSec.entries.push(entry);
+    }
+    markDirty();
+    renderList();
+    if (selectedId === entry.id) renderDetail(false);
+  });
+
+  let dlgSectionIndex = null;
+  function openSectionDialog(si) {
+    dlgSectionIndex = si;
+    $('#dlg-section-title').textContent = si === null ? 'Add section' : 'Rename section';
+    $('#f-sec-name').value = si === null ? '' : data.sections[si].heading;
+    $('#dlg-section').showModal();
+  }
+  $('#dlg-section').addEventListener('close', () => {
+    if ($('#dlg-section').returnValue !== 'save') return;
+    const name = $('#f-sec-name').value.trim();
+    if (!name) return;
+    if (dlgSectionIndex === null) data.sections.push({ heading: name, entries: [] });
+    else data.sections[dlgSectionIndex].heading = name;
+    markDirty();
+    renderList();
+  });
+
+  $('#btn-info').addEventListener('click', () => {
+    $('#f-biblio-title').value = data.title;
+    $('#f-intro').value = (data.intro || []).join('\n\n');
+    $('#dlg-info').showModal();
+  });
+  $('#dlg-info').addEventListener('close', () => {
+    if ($('#dlg-info').returnValue !== 'save') return;
+    data.title = $('#f-biblio-title').value.trim();
+    data.intro = $('#f-intro').value.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    document.title = data.title;
+    $('#biblio-title').textContent = data.title;
+    markDirty();
+    if (!selectedId) showWelcome();
+  });
+
+  function moveEntry(si, idx, delta) {
+    const arr = data.sections[si].entries;
+    const j = idx + delta;
+    if (j < 0 || j >= arr.length) return;
+    [arr[idx], arr[j]] = [arr[j], arr[idx]];
+    markDirty();
+    renderList();
+  }
+  function moveSection(si, delta) {
+    const j = si + delta;
+    if (j < 0 || j >= data.sections.length) return;
+    [data.sections[si], data.sections[j]] = [data.sections[j], data.sections[si]];
+    markDirty();
+    renderList();
+  }
+  function deleteEntry(id) {
+    const sec = sectionOf(id);
+    sec.entries.splice(sec.entries.findIndex((e) => e.id === id), 1);
+    if (selectedId === id) showWelcome();
+    markDirty();
+    renderList();
+  }
+  function deleteSection(si) {
+    const sec = data.sections[si];
+    if (sec.entries.some((e) => e.id === selectedId)) showWelcome();
+    data.sections.splice(si, 1);
+    markDirty();
+    renderList();
+  }
+
+  /* ---------------- Export ---------------- */
+
+  function serialize(locked) {
+    const out = JSON.parse(JSON.stringify(data));
+    out.locked = locked;
+    const json = JSON.stringify(out).replace(/</g, '\\u003c');
+    return PRISTINE.replace(
+      /(<script type="application\/json" id="biblio-data">)[\s\S]*?(<\/script>)/,
+      (m, open, close) => open + json + close
+    ).replace(/<title>[\s\S]*?<\/title>/, '<title>' + escapeHtml(out.title) + '</title>');
+  }
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function download(html, suffix) {
+    const slug = (data.title || 'bibliography').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    a.download = slug + suffix + '.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    dirty = false;
+    clearDraft();
+    $('#save-pill').hidden = true;
+    $('#edit-state').textContent = editing ? '✏️ Editing' : '';
+    showToast('Downloaded ' + a.download + ' — replace your old copy with it');
+  }
+  $('#btn-export').addEventListener('click', () => $('#dlg-export').showModal());
+  $('#btn-export-cancel').addEventListener('click', () => $('#dlg-export').close());
+  $('#btn-export-locked').addEventListener('click', () => { $('#dlg-export').close(); download(serialize(true), ''); });
+  $('#btn-export-master').addEventListener('click', () => { $('#dlg-export').close(); download(serialize(false), '-master'); });
+
+  /* ---------------- Draft backup (crash recovery) ---------------- */
+
+  const draftKey = () => 'biblioviewer-draft:' + (data.title || '');
+  function saveDraft() {
+    try { localStorage.setItem(draftKey(), JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(draftKey()); } catch (e) { /* ignore */ }
+  }
+  function maybeRestoreDraft() {
+    if (data.locked) return;
+    try {
+      const raw = localStorage.getItem(draftKey());
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (JSON.stringify(draft) === JSON.stringify(data)) return;
+      const bar = el('div', { class: 'snap-banner', style: 'margin:10px auto; max-width: 760px;' },
+        el('span', { text: 'A newer unsaved draft of this bibliography was found in this browser.' }),
+        el('button', {
+          text: 'Restore draft', onclick: () => {
+            data = draft;
+            dirty = true;
+            bar.remove();
+            document.title = data.title;
+            $('#biblio-title').textContent = data.title;
+            setEditing(editing);
+            showWelcome();
+          }
+        }),
+        el('button', { text: 'Discard draft', onclick: () => { clearDraft(); bar.remove(); } })
+      );
+      detailEl.prepend(bar);
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- Keyboard navigation ---------------- */
+
+  function visibleEntryIds() {
+    return [...entriesEl.querySelectorAll('.entry')].map((n) => n.dataset.id);
+  }
+  document.addEventListener('keydown', (ev) => {
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+      || document.querySelector('dialog[open]');
+    if (inField) return;
+    if (ev.key === '/') { ev.preventDefault(); filterEl.focus(); return; }
+    if (ev.key === 'ArrowDown' || ev.key === 'j' || ev.key === 'ArrowUp' || ev.key === 'k') {
+      const ids = visibleEntryIds();
+      if (!ids.length) return;
+      ev.preventDefault();
+      const dir = (ev.key === 'ArrowDown' || ev.key === 'j') ? 1 : -1;
+      const cur = ids.indexOf(selectedId);
+      const next = cur === -1 ? (dir === 1 ? 0 : ids.length - 1) : Math.min(ids.length - 1, Math.max(0, cur + dir));
+      selectEntry(ids[next], false);
+    }
+    if (ev.key === 'Escape' && document.body.classList.contains('show-detail')) {
+      document.body.classList.remove('show-detail');
+    }
+  });
+  filterEl.addEventListener('input', () => { if (!annotEditing) renderList(); });
+  filterEl.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { filterEl.value = ''; renderList(); filterEl.blur(); }
+    if (ev.key === 'Enter') {
+      const ids = visibleEntryIds();
+      if (ids.length) selectEntry(ids[0]);
+    }
+  });
+
+  /* ---------------- Divider drag ---------------- */
+
+  const divider = $('#divider');
+  const listPane = $('#list-pane');
+  try {
+    const saved = localStorage.getItem('biblioviewer-pane-width');
+    if (saved) listPane.style.width = saved + 'px';
+  } catch (e) { /* ignore */ }
+  divider.addEventListener('mousedown', (ev) => {
+    ev.preventDefault();
+    divider.classList.add('dragging');
+    const startX = ev.clientX;
+    const startW = listPane.getBoundingClientRect().width;
+    function onMove(e) {
+      const w = Math.min(window.innerWidth * 0.6, Math.max(280, startW + e.clientX - startX));
+      listPane.style.width = w + 'px';
+    }
+    function onUp() {
+      divider.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      try { localStorage.setItem('biblioviewer-pane-width', String(Math.round(listPane.getBoundingClientRect().width))); } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  /* ---------------- Boot ---------------- */
+
+  if (data.locked && !unlockedByHash) {
+    $('#toolbar').classList.add('hidden');
+  }
+  $('#save-pill').addEventListener('click', () => $('#dlg-export').showModal());
+  $('#btn-edit').addEventListener('click', () => setEditing(!editing));
+  $('#btn-add-section').addEventListener('click', () => openSectionDialog(null));
+  $('#biblio-title').addEventListener('click', showWelcome);
+  $('#back-btn').addEventListener('click', () => document.body.classList.remove('show-detail'));
+
+  window.addEventListener('beforeunload', (ev) => {
+    if (dirty) { ev.preventDefault(); ev.returnValue = ''; }
+  });
+
+  document.title = data.title;
+  $('#biblio-title').textContent = data.title;
+  showWelcome();
+  if (!data.locked || unlockedByHash) maybeRestoreDraft();
+})();
+</script>
+</body>
+</html>
