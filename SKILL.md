@@ -20,11 +20,11 @@ All tooling lives in this skill directory (`~/.claude/skills/biblioviewer/`):
 
 ## First use
 
-If `node_modules` is missing in the skill directory: `npm install --prefix ~/.claude/skills/biblioviewer` (needs Node 18+ for global fetch).
+Needs Node 18+. If a script fails with `ERR_MODULE_NOT_FOUND` (git/repo checkout), run `npm install` in the skill directory. The claude.ai upload zip instead ships esbuild-bundled self-contained scripts — no install needed, don't attempt one (rebuild the zip with `bash scripts/make_skill_zip.sh` from a repo checkout).
 
 ## Sandboxes without network access (e.g. claude.ai)
 
-If the execution sandbox blocks outbound fetches and/or npm installs (claude.ai does both; dependencies must be pre-bundled in the uploaded skill zip):
+If the execution sandbox blocks outbound fetches (claude.ai does):
 1. Fetch each article with the web_fetch tool instead, asking for raw page HTML, and save each to `<dir>/<entry-id>.html`.
 2. Run `fetch_snapshots.mjs <bibliography.json> --from-dir <dir>` — it extracts/sanitizes from those files instead of fetching.
 3. Build as normal; the output HTML is handed to the user as a downloadable file.
