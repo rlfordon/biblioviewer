@@ -15,6 +15,17 @@ const dom = new JSDOM(html, {
   virtualConsole: vc,
   beforeParse(window) {
     window.HTMLElement.prototype.scrollIntoView = function () {};
+    // jsdom's Blob implements only slice/size/type — no text(); all target
+    // browsers have it. Keep the string parts so the export round-trip below
+    // can read the blob back.
+    const NativeBlob = window.Blob;
+    window.Blob = class extends NativeBlob {
+      constructor(parts = [], opts) {
+        super(parts, opts);
+        this.__text = parts.map((p) => (typeof p === 'string' ? p : '')).join('');
+      }
+      async text() { return this.__text; }
+    };
     window.URL.createObjectURL = (blob) => { window.__lastExportBlob = blob; return 'blob:fake'; };
     window.URL.revokeObjectURL = () => {};
   },
@@ -41,6 +52,9 @@ function check(name, cond, extra = '') {
 }
 
 const entryCount = $$('.entry').length;
+const okSnapshots = (doc) => JSON.parse(doc.querySelector('#biblio-data').textContent)
+  .sections.flatMap((s) => s.entries).filter((e) => e.snapshot?.status === 'ok').length;
+const srcSnapshots = okSnapshots(document);
 check('title set', document.title.length > 3, document.title);
 check('sidebar title rendered', $('#biblio-title').textContent.length > 3);
 check('sections rendered', $$('.section-heading').length >= 1);
@@ -134,8 +148,10 @@ if (dom.window.__lastExportBlob) {
   check('exported copy is locked', doc2.querySelector('#toolbar').classList.contains('hidden'));
   check('exported copy carries the edit',
     [...doc2.querySelectorAll('.entry-title')].some((n) => n.textContent === 'SMOKE-TEST-TITLE'));
-  check('exported copy keeps snapshots', JSON.parse(doc2.querySelector('#biblio-data').textContent)
-    .sections.flatMap((s) => s.entries).some((e) => e.snapshot?.status === 'ok'));
+  // Compare against the source count rather than asserting >0, so the check is
+  // meaningful for link-only bibliographies that carry no snapshots at all.
+  check('exported copy keeps snapshots', okSnapshots(doc2) === srcSnapshots,
+    `${okSnapshots(doc2)} of ${srcSnapshots}`);
 }
 
 check('no JS errors', errors.length === 0, errors.slice(0, 3).join(' | '));

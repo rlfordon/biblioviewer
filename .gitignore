@@ -6,8 +6,11 @@ node_modules/
 bibliography.json
 *.html
 !template.html
+# ...except the throwaway test fixture, which cites only public pages and
+# carries no snapshots
+!test-fallback/bibliography.json
 
-# packaged skill snapshot for claude.ai upload
-biblioviewer-skill.zip
+# packaged skill snapshots (build artifacts; distributed via GitHub Releases)
+*.zip
 
 .DS_Store

@@ -6,13 +6,15 @@
 //   --only      refetch only the listed entry ids
 //   --force     refetch entries that already have a snapshot
 //   --from-dir  offline mode for sandboxes without network access (e.g. claude.ai):
-//               instead of fetching, read pre-downloaded page HTML from <dir>/<entry-id>.html
-//               (fetched by other means, e.g. the web_fetch tool) and extract/sanitize those
+//               instead of fetching, read pre-downloaded pages from <dir>/<entry-id>.html
+//               (saved by other means, e.g. an agent's web_fetch tool) and extract those.
+//               Such files are often NOT raw HTML — see MARKDOWN INPUT below.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import createDOMPurify from 'dompurify';
+import { marked } from 'marked';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -63,7 +65,42 @@ async function fetchWithTimeout(url, ms = 30000) {
   }
 }
 
-function extract(html, url) {
+const MIN_TEXT = 500; // below this, treat extraction as failed rather than ship a stub
+
+// MARKDOWN INPUT. Agent web_fetch tools — claude.ai's included — return pages
+// already reader-extracted and converted to Markdown, not raw HTML, even when
+// raw HTML is explicitly requested. Handing that to Readability does not fail:
+// jsdom parses it as one big text node, Readability wraps the blob in a <div>,
+// and the snapshot reports "ok" at full length while the reading pane shows
+// literal [text](url) link syntax and [[1]](…) footnote markers. So sniff for
+// real markup first and convert Markdown properly instead.
+function looksLikeHtml(s) {
+  return /<(?:html|body|article|main|section|div|p|h[1-6]|table|ul|ol)\b[^>]*>/i.test(s.slice(0, 4000));
+}
+
+// Such files may lead with a metadata block ("--- meta-DC.creator: …"), which
+// would otherwise render as visible junk at the top of the reading pane.
+function stripFrontMatter(md) {
+  const s = md.replace(/^﻿/, '');
+  if (!/^\s*---/.test(s)) return s;
+  const fenced = /^\s*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(s);
+  if (fenced) return s.slice(fenced[0].length);
+  // Unterminated block: drop the marker, then the run of key: value lines.
+  const lines = s.replace(/^\s*---[ \t]*/, '').split(/\r?\n/);
+  let i = 0;
+  while (i < lines.length && (/^[\w.\-]+\s*:\s/.test(lines[i]) || lines[i].trim() === '')) i++;
+  return lines.slice(i).join('\n');
+}
+
+function extract(source, url) {
+  if (!looksLikeHtml(source)) {
+    const body = stripFrontMatter(source);
+    if (body.trim().length < MIN_TEXT) return null;
+    // Already reader-extracted upstream, so there is no site chrome to strip —
+    // running Readability here would only reintroduce the wrapping bug above.
+    return { ...finish(marked.parse(body, { async: false, gfm: true }), url), source: 'markdown' };
+  }
+  const html = source;
   const vc = new VirtualConsole(); // swallow CSS/JS parse noise from real-world pages
   const dom = new JSDOM(html, { url, virtualConsole: vc });
   const docTitle = dom.window.document.title;
@@ -74,7 +111,7 @@ function extract(html, url) {
     const node =
       fallbackDom.window.document.querySelector('article') ||
       fallbackDom.window.document.querySelector('main');
-    if (!node || node.textContent.trim().length < 500) return null;
+    if (!node || node.textContent.trim().length < MIN_TEXT) return null;
     article = {
       content: node.innerHTML,
       byline: null,
@@ -84,10 +121,26 @@ function extract(html, url) {
       title: docTitle || null,
     };
   }
+  const out = finish(article.content, url);
+  if (out.length < MIN_TEXT) return null;
+  return {
+    ...out,
+    byline: article.byline ?? null,
+    siteName: article.siteName ?? null,
+    excerpt: article.excerpt ?? null,
+    articleTitle: article.title ?? null,
+    source: 'html',
+  };
+}
 
+// Sanitize, then force absolute/safe link and image URLs. Shared by both paths:
+// Markdown-sourced content needs the same treatment, and its relative links
+// (e.g. "./Annotated_bibliography#cite_note-1") are dead in a standalone file
+// unless resolved against the entry URL here.
+function finish(contentHtml, url) {
   const purifyWindow = new JSDOM('').window;
   const DOMPurify = createDOMPurify(purifyWindow);
-  const clean = DOMPurify.sanitize(article.content, {
+  const clean = DOMPurify.sanitize(contentHtml, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
@@ -120,32 +173,33 @@ function extract(html, url) {
       img.remove();
     }
   }
+  const root = doc.getElementById('root');
   return {
-    html: doc.getElementById('root').innerHTML,
-    byline: article.byline ?? null,
-    siteName: article.siteName ?? null,
-    excerpt: article.excerpt ?? null,
-    length: article.length ?? null,
-    articleTitle: article.title ?? null,
+    html: root.innerHTML,
+    length: root.textContent.trim().length,
+    byline: null,
+    siteName: null,
+    excerpt: null,
+    articleTitle: null,
   };
 }
 
-let ok = 0, failed = 0;
+let ok = 0, failed = 0, fromMarkdown = 0;
 for (const entry of targets) {
   process.stdout.write(`  ${entry.id} … `);
   try {
-    let html, baseUrl;
+    let source, baseUrl;
     if (fromDir) {
-      html = readFileSync(`${fromDir}/${entry.id}.html`, 'utf8');
+      source = readFileSync(`${fromDir}/${entry.id}.html`, 'utf8');
       baseUrl = entry.url;
     } else {
       const res = await fetchWithTimeout(entry.url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      html = await res.text();
+      source = await res.text();
       baseUrl = res.url;
     }
-    const result = extract(html, baseUrl);
-    if (!result) throw new Error('readability found no article content');
+    const result = extract(source, baseUrl);
+    if (!result) throw new Error(`no article content (under ${MIN_TEXT} chars of text)`);
     entry.snapshot = {
       status: 'ok',
       fetchedAt: new Date().toISOString().slice(0, 10),
@@ -153,7 +207,8 @@ for (const entry of targets) {
       ...result,
     };
     ok++;
-    console.log(`ok (${result.length} chars)`);
+    if (result.source === 'markdown') fromMarkdown++;
+    console.log(`ok (${result.length} chars${result.source === 'markdown' ? ', from markdown' : ''})`);
   } catch (err) {
     entry.snapshot = {
       status: 'failed',
@@ -168,6 +223,13 @@ for (const entry of targets) {
 
 writeFileSync(file, JSON.stringify(data, null, 2));
 console.log(`\nDone: ${ok} ok, ${failed} failed. Snapshots written to ${file}`);
+if (fromMarkdown) {
+  console.log(
+    `Note: ${fromMarkdown} snapshot(s) came from Markdown, not HTML — the source was already\n` +
+    'reader-extracted upstream. Expect reduced fidelity (no images, flattened structure) and\n' +
+    'verify nothing was truncated. Marked as "source": "markdown" in the JSON.'
+  );
+}
 if (failed) {
   console.log('Failed entries will fall back to live-embed / open-in-new-tab in the viewer.');
   process.exitCode = 2;

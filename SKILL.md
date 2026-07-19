@@ -11,9 +11,12 @@ Editing in unlocked (master) copies works at two levels:
 - **Quick annotation editing while reading** (the primary authoring flow): hover any annotation in the sidebar or reading pane → ✎ pencil → edit in place (⌘⏎ save, Esc cancel). A floating "Download updated file" pill appears once anything changed.
 - **Full edit mode** (Edit button in the sidebar footer): add/edit/reorder/delete entries and sections, edit title/intro/tags, then Export locked and/or master copies.
 
-All tooling lives in this skill directory (`~/.claude/skills/biblioviewer/`):
+All tooling lives in this skill directory, whose path depends on the surface —
+`~/.claude/skills/biblioviewer/` in Claude Code, `/mnt/skills/user/biblioviewer/` on
+claude.ai. Check which exists before running anything; the commands below write `$SKILL`
+for it.
 - `template.html` — the viewer app with `__BIBLIO_DATA__` / `__BIBLIO_TITLE__` placeholders
-- `scripts/fetch_snapshots.mjs` — fetches each URL, extracts readable article HTML (Readability, `<article>`-tag fallback), sanitizes with DOMPurify, writes snapshots into the JSON
+- `scripts/fetch_snapshots.mjs` — fetches each URL, extracts readable article HTML (Readability, `<article>`-tag fallback, Markdown conversion for already-extracted input), sanitizes with DOMPurify, writes snapshots into the JSON
 - `scripts/build.mjs` — injects JSON into the template → final HTML
 - `scripts/extract_data.mjs` — pulls the JSON back out of a built file (for editing/refreshing)
 - `scripts/smoke_test.mjs` — headless verification of a built file
@@ -25,9 +28,23 @@ Needs Node 18+. If a script fails with `ERR_MODULE_NOT_FOUND` (git/repo checkout
 ## Sandboxes without network access (e.g. claude.ai)
 
 If the execution sandbox blocks outbound fetches (claude.ai does):
-1. Fetch each article with the web_fetch tool instead, asking for raw page HTML, and save each to `<dir>/<entry-id>.html`.
+1. Fetch each article with the web_fetch tool instead and save each to `<dir>/<entry-id>.html`.
 2. Run `fetch_snapshots.mjs <bibliography.json> --from-dir <dir>` — it extracts/sanitizes from those files instead of fetching.
 3. Build as normal; the output HTML is handed to the user as a downloadable file.
+
+**Save each file complete and verbatim — never abbreviate, summarize, or truncate a long
+page.** A partial save still reports `status: "ok"`, so truncation is invisible downstream
+and silently ships a half-article to the reader. If a page is too long to write in one go,
+write it in successive appends rather than shortening it.
+
+**Expect Markdown, not HTML.** Despite the tool's name, web_fetch on claude.ai returns
+pages already reader-extracted and converted to Markdown — asking for "raw HTML" does not
+change this. `fetch_snapshots.mjs` detects markup-free input and converts it properly
+(front-matter stripped, relative links resolved against the entry URL), tagging the result
+`"source": "markdown"` and printing a fidelity warning. That path is lossy by nature: no
+images, flattened structure, and whatever the upstream extractor already discarded. Tell
+the user their snapshots are reduced-fidelity when it triggers. If real HTML is reachable
+by any means, prefer it — the output is materially better.
 
 ## Data schema (`bibliography.json`)
 
@@ -42,7 +59,8 @@ If the execution sandbox blocks outbound fetches (claude.ai does):
       { "id": "kebab-unique", "title": "…", "url": "https://…",
         "tags": ["In-depth"], "citation": "Author, Source (Date)",
         "annotation": "2-4 sentence annotation; inline HTML ok",
-        "snapshot": { "status": "ok|failed", "fetchedAt": "YYYY-MM-DD", "html": "…", "...": "written by fetch script — never author by hand" } }
+        "snapshot": { "status": "ok|failed", "fetchedAt": "YYYY-MM-DD", "html": "…",
+                      "source": "html|markdown", "...": "written by fetch script — never author by hand" } }
     ] }
   ]
 }
@@ -53,18 +71,18 @@ Tag colors: `amber violet blue green red gray`. Unknown tags get auto-assigned c
 ## Workflow: new bibliography
 
 1. **Parse the source** (docx/md/html/pasted text) into `bibliography.json` in the working directory, following the schema. Preserve the user's citation style verbatim; strip conversion artifacts (e.g. `[cite: 1]`). Keep their section grouping — the annotation and grouping ARE the research product, don't editorialize them.
-2. **Fetch snapshots**: `node ~/.claude/skills/biblioviewer/scripts/fetch_snapshots.mjs bibliography.json`
+2. **Fetch snapshots**: `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json`
    - Exit code 2 = some entries failed; they're marked `status: "failed"` and the viewer falls back gracefully. For failures, check whether the page is JS-only or bot-blocked (`curl -sL <url> | head`); if the content is genuinely there but extraction failed, investigate; otherwise leave the fallback.
    - `--only id1,id2` refetches specific entries; `--force` refetches everything.
 3. **Build both copies**:
-   - `node ~/.claude/skills/biblioviewer/scripts/build.mjs bibliography.json <slug>-master.html` (editable — the user keeps this)
-   - `node ~/.claude/skills/biblioviewer/scripts/build.mjs bibliography.json <slug>.html --locked` (clean read-only copy to share)
-4. **Verify**: `node ~/.claude/skills/biblioviewer/scripts/smoke_test.mjs <file>` on both. If the Chrome extension is connected, also open the file visually.
+   - `node $SKILL/scripts/build.mjs bibliography.json <slug>-master.html` (editable — the user keeps this)
+   - `node $SKILL/scripts/build.mjs bibliography.json <slug>.html --locked` (clean read-only copy to share)
+4. **Verify**: `node $SKILL/scripts/smoke_test.mjs <file>` on both. If the Chrome extension is connected, also open the file visually.
 5. Tell the user: master = keep and edit; locked = share. In-page edits are exported via the Edit → Export buttons; snapshots for NEW entries require a rebuild (workflow below).
 
 ## Workflow: update/refresh an existing biblioviewer file
 
-1. `node ~/.claude/skills/biblioviewer/scripts/extract_data.mjs <their-file.html> bibliography.json`
+1. `node $SKILL/scripts/extract_data.mjs <their-file.html> bibliography.json`
 2. Apply requested changes to the JSON (or the user already edited in-browser — extraction preserves their edits).
 3. Refetch as needed (`fetch_snapshots.mjs` only fetches entries without an `ok` snapshot by default).
 4. Rebuild master + locked, smoke test, deliver.

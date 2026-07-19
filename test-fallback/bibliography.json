@@ -1,0 +1,44 @@
+{
+  "title": "Fallback Test Bibliography",
+  "intro": [
+    "A three-entry throwaway bibliography used to test how biblioviewer behaves in a sandbox with no outbound network access (claude.ai, Cowork). Not a real research product — the annotations are filler.",
+    "The three sources are chosen for <strong>structural variety</strong>, not subject matter: one heavily marked-up reference page, one long-form scholarly essay, one catalog record. If reader-mode extraction survives the sandbox, all three should look different from each other in the reading pane."
+  ],
+  "locked": false,
+  "tagDefinitions": [
+    { "label": "Structure-rich", "color": "amber" },
+    { "label": "Long-form", "color": "blue" },
+    { "label": "Catalog record", "color": "green" }
+  ],
+  "sections": [
+    {
+      "heading": "Extraction test set",
+      "entries": [
+        {
+          "id": "wikipedia-annotated-bibliography",
+          "title": "Annotated bibliography",
+          "url": "https://en.wikipedia.org/wiki/Annotated_bibliography",
+          "tags": ["Structure-rich"],
+          "citation": "Wikipedia, The Free Encyclopedia",
+          "annotation": "The highest-signal entry in this set. Wikipedia pages carry headings, footnote superscripts, internal links, italics, and list markup — so this is the entry that reveals whether the sandbox preserved HTML structure or flattened everything to plain prose."
+        },
+        {
+          "id": "sep-rights",
+          "title": "Rights",
+          "url": "https://plato.stanford.edu/entries/rights/",
+          "tags": ["Long-form"],
+          "citation": "Stanford Encyclopedia of Philosophy",
+          "annotation": "A long scholarly essay with numbered sections and blockquotes. Tests whether extraction holds up over a document far longer than a typical news article, and whether section hierarchy survives."
+        },
+        {
+          "id": "gutenberg-pride-and-prejudice",
+          "title": "Pride and Prejudice, by Jane Austen",
+          "url": "https://www.gutenberg.org/ebooks/1342",
+          "tags": ["Catalog record"],
+          "citation": "Project Gutenberg",
+          "annotation": "A catalog record rather than an article — mostly a metadata table with download links. Readability often struggles with pages like this, so it doubles as a test of the graceful-failure path."
+        }
+      ]
+    }
+  ]
+}
