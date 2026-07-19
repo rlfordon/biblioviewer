@@ -34,8 +34,12 @@ If the execution sandbox blocks outbound fetches (claude.ai does):
 
 **Save each file complete and verbatim — never abbreviate, summarize, or truncate a long
 page.** A partial save still reports `status: "ok"`, so truncation is invisible downstream
-and silently ships a half-article to the reader. If a page is too long to write in one go,
-write it in successive appends rather than shortening it.
+and silently ships a half-article to the reader. If a page does not fit in one message,
+append it across several writes (`cat >> file`) rather than shortening it — hitting the
+per-message output cap is the normal reason a long article gets silently cut.
+
+**Never re-read a saved page.** No `cat`, no `head` "to check" — that re-pays the full
+token cost for nothing. Verify with `wc -c` and move on.
 
 **Expect Markdown, not HTML.** Despite the tool's name, web_fetch on claude.ai returns
 pages already reader-extracted and converted to Markdown — asking for "raw HTML" does not
@@ -45,6 +49,34 @@ change this. `fetch_snapshots.mjs` detects markup-free input and converts it pro
 images, flattened structure, and whatever the upstream extractor already discarded. Tell
 the user their snapshots are reduced-fidelity when it triggers. If real HTML is reachable
 by any means, prefer it — the output is materially better.
+
+## Large bibliographies in a sandbox: work in batches
+
+On claude.ai every article costs roughly **twice its size** in tokens — once arriving as a
+web_fetch result, again as output when written to disk. Around a dozen entries that
+exhausts the conversation, and the run dies partway with snapshots half-written. Anything
+past ~8–12 entries must be split across several conversations.
+
+This works because `fetch_snapshots.mjs` only targets entries that lack an `ok` snapshot,
+so `bibliography.json` **is** the progress record. Carry it forward and the work resumes:
+
+1. Build the complete `bibliography.json` first — every entry, no snapshots. It stays small.
+2. `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json --status` → what's pending.
+3. Fetch the next batch only: save ~8 pages to `<dir>/`, then
+   `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json --from-dir <dir> --limit 8`
+4. Give the user the updated `bibliography.json` as a download and tell them plainly:
+   *"N of M articles cached — start a new conversation, upload this file, and say
+   'continue caching'."*
+5. In the new conversation, upload it and return to step 2. Repeat until nothing is pending.
+6. Only then build master + locked and smoke test.
+
+Do not attempt a large bibliography in one conversation to be helpful — a session that dies
+at entry 15 wastes everything since the last download. Hand back the JSON at every batch
+boundary; it is the only durable state.
+
+**A surface with network access avoids all of this.** In Claude Code the bytes go URL → disk
+without passing through the context, so entry count is irrelevant. If the user has that
+option and a long bibliography, say so — batching is the fallback, not the recommended path.
 
 ## Data schema (`bibliography.json`)
 
@@ -74,6 +106,8 @@ Tag colors: `amber violet blue green red gray`. Unknown tags get auto-assigned c
 2. **Fetch snapshots**: `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json`
    - Exit code 2 = some entries failed; they're marked `status: "failed"` and the viewer falls back gracefully. For failures, check whether the page is JS-only or bot-blocked (`curl -sL <url> | head`); if the content is genuinely there but extraction failed, investigate; otherwise leave the fallback.
    - `--only id1,id2` refetches specific entries; `--force` refetches everything.
+   - `--status` reports progress without fetching; `--limit N` caps a run to N pending
+     entries (see the batching section above).
 3. **Build both copies**:
    - `node $SKILL/scripts/build.mjs bibliography.json <slug>-master.html` (editable — the user keeps this)
    - `node $SKILL/scripts/build.mjs bibliography.json <slug>.html --locked` (clean read-only copy to share)

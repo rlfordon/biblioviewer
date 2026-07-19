@@ -2,9 +2,12 @@
 // Fetch each bibliography entry's URL and store a clean reader-mode snapshot
 // (Mozilla Readability, sanitized with DOMPurify) back into the JSON file.
 //
-// Usage: node scripts/fetch_snapshots.mjs <bibliography.json> [--only id1,id2] [--force] [--from-dir dir]
+// Usage: node scripts/fetch_snapshots.mjs <bibliography.json> [--only id1,id2] [--force]
+//                                          [--limit N] [--status] [--from-dir dir]
 //   --only      refetch only the listed entry ids
 //   --force     refetch entries that already have a snapshot
+//   --limit N   fetch at most N still-pending entries (batching for tight contexts)
+//   --status    report per-entry progress and exit without fetching
 //   --from-dir  offline mode for sandboxes without network access (e.g. claude.ai):
 //               instead of fetching, read pre-downloaded pages from <dir>/<entry-id>.html
 //               (saved by other means, e.g. an agent's web_fetch tool) and extract those.
@@ -34,18 +37,55 @@ if (!file) {
   process.exit(1);
 }
 const force = args.includes('--force');
+const status = args.includes('--status');
 const onlyArg = args.find((a) => a.startsWith('--only'));
 const only = onlyArg ? (onlyArg.split('=')[1] ?? args[args.indexOf(onlyArg) + 1] ?? '').split(',').filter(Boolean) : null;
 const dirIdx = args.indexOf('--from-dir');
 const fromDir = dirIdx !== -1 ? args[dirIdx + 1] : null;
+const limitArg = args.find((a) => a.startsWith('--limit'));
+const limit = limitArg
+  ? parseInt(limitArg.split('=')[1] ?? args[args.indexOf(limitArg) + 1] ?? '', 10)
+  : null;
+if (limitArg && !(limit > 0)) {
+  console.error('--limit needs a positive integer, e.g. --limit 8');
+  process.exit(1);
+}
 
 const data = JSON.parse(readFileSync(file, 'utf8'));
 const entries = data.sections.flatMap((s) => s.entries);
-const targets = entries.filter(
+const pending = entries.filter(
   (e) => e.url && (only ? only.includes(e.id) : force || !e.snapshot || e.snapshot.status !== 'ok')
 );
 
-console.log(`Fetching ${targets.length} of ${entries.length} entries…`);
+// --status: report progress and exit. Lets a batched run across several
+// conversations (see SKILL.md) resume without inspecting the JSON by hand —
+// re-reading the JSON costs context, which is the scarce resource there.
+if (status) {
+  const done = entries.filter((e) => e.snapshot?.status === 'ok');
+  const md = done.filter((e) => e.snapshot.source === 'markdown');
+  for (const e of entries) {
+    const s = e.snapshot;
+    const state = !e.url ? 'no url'
+      : s?.status === 'ok' ? `ok (${s.length ?? '?'} chars${s.source === 'markdown' ? ', markdown' : ''})`
+      : s?.status === 'failed' ? `failed — ${s.error ?? 'unknown'}`
+      : 'PENDING';
+    console.log(`  ${state === 'PENDING' ? '·' : ' '} ${e.id.padEnd(40)} ${state}`);
+  }
+  console.log(`\n${done.length} of ${entries.length} done, ${pending.length} pending.`);
+  if (md.length) console.log(`${md.length} came from Markdown (reduced fidelity).`);
+  if (pending.length) {
+    console.log(`Next batch: node ${process.argv[1]} ${file} --limit 8` + (fromDir ? ` --from-dir ${fromDir}` : ''));
+  }
+  process.exit(0);
+}
+
+// --limit: take the next N pending, so a large bibliography can be worked in
+// batches that fit one conversation's context.
+const targets = limit ? pending.slice(0, limit) : pending;
+console.log(
+  `Fetching ${targets.length} of ${entries.length} entries…` +
+  (limit && pending.length > targets.length ? ` (${pending.length - targets.length} more pending after this batch)` : '')
+);
 
 async function fetchWithTimeout(url, ms = 30000) {
   const ctrl = new AbortController();
