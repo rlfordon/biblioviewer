@@ -50,6 +50,14 @@ if (limitArg && !(limit > 0)) {
   console.error('--limit needs a positive integer, e.g. --limit 8');
   process.exit(1);
 }
+const maxArg = args.find((a) => a.startsWith('--max-chars'));
+const maxChars = maxArg
+  ? parseInt(maxArg.split('=')[1] ?? args[args.indexOf(maxArg) + 1] ?? '', 10)
+  : null;
+if (maxArg && !(maxChars > 0)) {
+  console.error('--max-chars needs a positive integer, e.g. --max-chars 8000');
+  process.exit(1);
+}
 
 const data = JSON.parse(readFileSync(file, 'utf8'));
 const entries = data.sections.flatMap((s) => s.entries);
@@ -173,6 +181,23 @@ function extract(source, url) {
   };
 }
 
+// Drop whole blocks past `budget` characters of text, descending into any block
+// that straddles it so the cut lands at a real boundary and the markup stays
+// well-formed. Readability nests its output, so a single-level walk would see
+// one oversized container and keep all of it.
+function trimTo(node, budget) {
+  let kept = 0;
+  for (const child of [...node.children]) {
+    if (kept >= budget) { child.remove(); continue; }
+    const len = child.textContent.length;
+    if (kept + len <= budget) { kept += len; continue; }
+    // Straddles the budget: recurse if divisible, else keep this one block whole
+    // rather than cutting mid-sentence.
+    kept += child.children.length ? trimTo(child, budget - kept) : len;
+  }
+  return kept;
+}
+
 // Sanitize, then force absolute/safe link and image URLs. Shared by both paths:
 // Markdown-sourced content needs the same treatment, and its relative links
 // (e.g. "./Annotated_bibliography#cite_note-1") are dead in a standalone file
@@ -214,9 +239,33 @@ function finish(contentHtml, url) {
     }
   }
   const root = doc.getElementById('root');
+  const fullLength = root.textContent.trim().length;
+
+  // --max-chars: keep only whole top-level blocks up to the budget, so the
+  // stored HTML stays well-formed, and note the cut in the reading pane. Cheap
+  // snapshots matter in sandboxes, where every stored character costs tokens
+  // twice over (see SKILL.md) — and a preview plus a link to the original is a
+  // lighter copyright posture than full text.
+  let truncated = false;
+  if (maxChars && fullLength > maxChars) {
+    trimTo(root, maxChars);
+    truncated = true;
+    const note = doc.createElement('p');
+    const link = doc.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+    link.textContent = 'Read the full article at the original source →';
+    note.appendChild(doc.createTextNode('This is a preview of the first part of the article. '));
+    note.appendChild(link);
+    root.appendChild(note);
+  }
+
   return {
     html: root.innerHTML,
     length: root.textContent.trim().length,
+    fullLength,
+    truncated,
     byline: null,
     siteName: null,
     excerpt: null,
