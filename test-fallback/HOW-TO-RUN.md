@@ -1,5 +1,24 @@
 # Sandbox fallback test (claude.ai)
 
+> **This test has been run — 2026-07-19. Results below; kept as a record and in
+> case the sandbox's behavior changes later.**
+>
+> 1. **web_fetch returns Markdown, not HTML**, even when raw HTML is explicitly
+>    requested. No tags at all: links as `[text](url)`, footnotes as `[[1]](…)`,
+>    plus a leading metadata block on some sources.
+> 2. **Nothing failed loudly.** Readability accepted the Markdown, wrapped it in
+>    a `<div>`, and every entry reported `status: "ok"` at near-full length while
+>    the reading pane showed the literal Markdown syntax. `fetch_snapshots.mjs`
+>    now sniffs for markup and converts Markdown properly instead.
+> 3. **It does not scale.** A second three-entry run exhausted the conversation's
+>    context without finishing, after several minutes. Each article costs roughly
+>    twice its size in tokens — in as a fetch result, out as a file write — and
+>    batching doesn't rescue that. The claude.ai path is documented as a fallback
+>    for two or three entries, not a way to build a real bibliography.
+> 4. Claude also truncated one long page rather than failing, which reported
+>    `"ok"` too. `SKILL.md` now requires complete verbatim saves via successive
+>    appends.
+
 Goal: find out what claude.ai's web-fetch tool actually hands back when the
 skill asks for page HTML — real markup, or text that's already been flattened.
 

@@ -25,7 +25,22 @@ for it.
 
 Needs Node 18+. If a script fails with `ERR_MODULE_NOT_FOUND` (git/repo checkout), run `npm install` in the skill directory. The claude.ai upload zip instead ships esbuild-bundled self-contained scripts — no install needed, don't attempt one (rebuild the zip with `bash scripts/make_skill_zip.sh` from a repo checkout).
 
-## Sandboxes without network access (e.g. claude.ai)
+## Sandboxes without network access (e.g. claude.ai) — not recommended
+
+**Tested 2026-07-19 and it does not work in practice.** A three-entry bibliography
+exhausted the conversation's context without finishing, after several minutes. The cause is
+structural, not a tuning problem: the sandbox blocks outbound fetches, so every article must
+arrive as a web_fetch result and leave again as output tokens to reach disk — roughly twice
+its size in context, with no way to avoid the round trip. Batching across conversations
+does not rescue it at that cost per entry.
+
+Steer the user to a surface with network access, where `fetch_snapshots.mjs` fetches
+straight to disk and article size is irrelevant. If they cannot, be honest that caching is
+impractical here and offer a link-only viewer instead — no snapshots, builds instantly, and
+still gives them the sidebar, annotations, filtering, and keyboard navigation.
+
+The rest of this section documents the fallback for the two- or three-entry case. It works;
+it just does not scale.
 
 If the execution sandbox blocks outbound fetches (claude.ai does):
 1. Fetch each article with the web_fetch tool instead and save each to `<dir>/<entry-id>.html`.
@@ -50,33 +65,18 @@ images, flattened structure, and whatever the upstream extractor already discard
 the user their snapshots are reduced-fidelity when it triggers. If real HTML is reachable
 by any means, prefer it — the output is materially better.
 
-## Large bibliographies in a sandbox: work in batches
+## Resuming an interrupted fetch
 
-On claude.ai every article costs roughly **twice its size** in tokens — once arriving as a
-web_fetch result, again as output when written to disk. Around a dozen entries that
-exhausts the conversation, and the run dies partway with snapshots half-written. Anything
-past ~8–12 entries must be split across several conversations.
+`fetch_snapshots.mjs` only targets entries that lack an `ok` snapshot, so
+`bibliography.json` doubles as the progress record — a run that dies partway can simply be
+re-run. `--status` lists what is still pending without fetching; `--limit N` caps a run to
+N pending entries. Both are useful for a long network fetch you want to spread out, and
+were originally added for sandbox batching before that turned out to be unworkable.
 
-This works because `fetch_snapshots.mjs` only targets entries that lack an `ok` snapshot,
-so `bibliography.json` **is** the progress record. Carry it forward and the work resumes:
-
-1. Build the complete `bibliography.json` first — every entry, no snapshots. It stays small.
-2. `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json --status` → what's pending.
-3. Fetch the next batch only: save ~8 pages to `<dir>/`, then
-   `node $SKILL/scripts/fetch_snapshots.mjs bibliography.json --from-dir <dir> --limit 8`
-4. Give the user the updated `bibliography.json` as a download and tell them plainly:
-   *"N of M articles cached — start a new conversation, upload this file, and say
-   'continue caching'."*
-5. In the new conversation, upload it and return to step 2. Repeat until nothing is pending.
-6. Only then build master + locked and smoke test.
-
-Do not attempt a large bibliography in one conversation to be helpful — a session that dies
-at entry 15 wastes everything since the last download. Hand back the JSON at every batch
-boundary; it is the only durable state.
-
-**A surface with network access avoids all of this.** In Claude Code the bytes go URL → disk
-without passing through the context, so entry count is irrelevant. If the user has that
-option and a long bibliography, say so — batching is the fallback, not the recommended path.
+`--max-chars N` stores only the first N characters of each article, cutting at a block
+boundary and appending a link to the original. It exists for tight budgets, but it gives up
+most of what makes a cached snapshot worth having — prefer full snapshots unless the user
+specifically asks for previews.
 
 ## Data schema (`bibliography.json`)
 

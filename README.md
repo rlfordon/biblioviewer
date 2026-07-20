@@ -23,7 +23,17 @@ git clone https://github.com/rlfordon/biblioviewer ~/.claude/skills/biblioviewer
 npm install --prefix ~/.claude/skills/biblioviewer
 ```
 
-Then in any Claude Code session, hand over a bibliography in any format ("turn this into a biblioviewer") and Claude parses it, fetches snapshots, builds master + locked copies, and runs the test suite. For claude.ai, zip the folder (with `node_modules`) and upload under Settings → Capabilities → Skills; `SKILL.md` documents the no-network fallback claude.ai needs.
+Then in any Claude Code session, hand over a bibliography in any format ("turn this into a biblioviewer") and Claude parses it, fetches snapshots, builds master + locked copies, and runs the test suite.
+
+### On claude.ai: works, but not usefully
+
+The skill can be packaged for claude.ai — run `bash scripts/make_skill_zip.sh` and upload the resulting zip at [claude.ai/customize/skills](https://claude.ai/customize/skills). (Bundle the zip that way rather than zipping the folder yourself: claude.ai rejects archives containing `@` in paths, which rules out shipping `node_modules`. The script esbuild-bundles each script instead, so no install is needed in the sandbox.)
+
+**But snapshot caching is impractical there, and that is most of the point of this tool.** Tested 2026-07-19: claude.ai's sandbox blocks outbound fetches, so each article has to arrive as a `web_fetch` result and leave again as output tokens to reach disk — roughly twice its size in context. A three-entry bibliography ran for several minutes and exhausted the conversation without finishing. Batching across conversations doesn't fix a per-entry cost that high.
+
+Two smaller findings from the same test: `web_fetch` returns pages already converted to Markdown, not raw HTML, even when raw HTML is requested (the fetch script detects this and converts properly, flagging the snapshot `"source": "markdown"`, but fidelity is reduced); and the skill lands at `/mnt/skills/user/biblioviewer/` rather than `~/.claude/skills/`.
+
+Use Claude Code, where the bytes go URL → disk without passing through a context window and article count is irrelevant. The *output* file needs nothing installed — that's the part to share with non-technical colleagues.
 
 ## Use by hand
 
@@ -47,7 +57,7 @@ node scripts/smoke_test.mjs my-biblio.html
 node scripts/extract_data.mjs my-biblio-master.html bibliography.json
 ```
 
-`fetch_snapshots.mjs` flags: `--only id1,id2` (refetch specific entries), `--force` (refetch all), `--from-dir dir` (offline mode: extract from pre-downloaded `<entry-id>.html` files instead of fetching).
+`fetch_snapshots.mjs` flags: `--only id1,id2` (refetch specific entries), `--force` (refetch all), `--status` (report progress, fetch nothing), `--limit N` (cap a run to N pending entries), `--max-chars N` (store only a preview of each article), `--from-dir dir` (offline mode: extract from pre-downloaded `<entry-id>.html` files instead of fetching).
 
 ## A note on cached copies
 
